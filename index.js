@@ -30,28 +30,34 @@ async function startBot() {
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
 
+    if (connection === "open") {
+      console.log("✅ WhatsApp bağlantısı kuruldu");
+
+      // SADECE kayıtlı değilse pairing code üret
+      if (!state.creds.registered) {
+        const phoneNumber = "905102211214"; // + koyma
+
+        try {
+          const code = await sock.requestPairingCode(phoneNumber);
+          console.log("📱 Pairing Code:", code);
+        } catch (err) {
+          console.log("❌ Pairing Code alınamadı:", err.message);
+        }
+      }
+    }
+
     if (connection === "close") {
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !==
         DisconnectReason.loggedOut;
 
+      console.log("Bağlantı kapandı. Yeniden bağlanılıyor...");
+
       if (shouldReconnect) {
         startBot();
       }
     }
-
-    if (connection === "open") {
-      console.log("✅ WhatsApp bağlantısı kuruldu");
-    }
   });
-
-  // Pairing Code üret
-  if (!state.creds.registered) {
-    const phoneNumber = "905102211214"; // başında + yok
-
-    const code = await sock.requestPairingCode(phoneNumber);
-    console.log("📱 Pairing Code:", code);
-  }
 }
 
 startBot();
