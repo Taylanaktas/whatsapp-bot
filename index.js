@@ -1,89 +1,54 @@
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason
-} from "@whiskeysockets/baileys";
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
 import express from "express";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Render kapanmasın diye basit server
 app.get("/", (req, res) => {
-  res.send("Bot çalışıyor");
+  res.send("Bot çalışıyor.");
 });
 
 app.listen(PORT, () => {
   console.log("HTTP server çalışıyor:", PORT);
 });
 
-const { state, saveCreds } = await useMultiFileAuthState("auth");
+async function startSock() {
+  const { state, saveCreds } = await useMultiFileAuthState("auth");
 
-const sock = makeWASocket({
-  auth: state
-});
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: true
+  });
 
-sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", saveCreds);
 
-// QR kodu loga yazdır
-sock.ev.on("connection.update", (update) => {
-  const { qr, connection, lastDisconnect } = update;
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect } = update;
 
-  if (qr) {
-    console.log("QR KOD:");
-    console.log(qr);
-  }
+    if (connection === "open") {
+      console.log("WhatsApp bağlandı.");
+    }
 
-  if (connection === "close") {
-    const shouldReconnect =
-      lastDisconnect?.error?.output?.statusCode !==
-      DisconnectReason.loggedOut;
-
-    if (shouldReconnect) {
+    if (connection === "close") {
+      console.log("Bağlantı koptu, tekrar bağlanılıyor...");
       startSock();
     }
-  }
+  });
 
-  if (connection === "open") {
-    console.log("WhatsApp bağlantısı başarılı");
-  }
-});
+  sock.ev.on("messages.upsert", async (m) => {
+    const msg = m.messages[0];
+    if (!msg.message) return;
 
-const songs = [
-  "Müslüm Gürses - Affet",
-  "Sezen Aksu - Gülümse",
-  "Ferdi Tayfur - Ben de Özledim",
-  "İbrahim Tatlıses - Haydi Söyle"
-];
+    const text =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text;
 
-sock.ev.on("messages.upsert", async ({ messages }) => {
-  const msg = messages[0];
-  if (!msg.message || msg.key.fromMe) return;
+    if (!text) return;
 
-  const text =
-    msg.message.conversation ||
-    msg.message.extendedTextMessage?.text;
+    if (text === "!ping") {
+      await sock.sendMessage(msg.key.remoteJid, { text: "pong" });
+    }
+  });
+}
 
-  if (!text) return;
-
-  if (text === ".sarki") {
-    const song = songs[Math.floor(Math.random() * songs.length)];
-    await sock.sendMessage(msg.key.remoteJid, {
-      text: "🎵 " + song
-    });
-  }
-
-  if (text === ".1930") {
-    const now = new Date();
-    const target = new Date();
-    target.setHours(19, 30, 0);
-
-    let diff = target - now;
-    if (diff < 0) diff += 24 * 60 * 60 * 1000;
-
-    const minutes = Math.floor(diff / 60000);
-
-    await sock.sendMessage(msg.key.remoteJid, {
-      text: `⏱️ 19:30'a ${minutes} dakika var.`
-    });
-  }
-});
+startSock();
