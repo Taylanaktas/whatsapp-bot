@@ -1,10 +1,12 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason
+} from "@whiskeysockets/baileys";
 import express from "express";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Render kapanmasın diye basit server
 app.get("/", (req, res) => {
   res.send("Bot çalışıyor");
 });
@@ -17,7 +19,8 @@ async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
 
   const sock = makeWASocket({
-    auth: state
+    auth: state,
+    printQRInTerminal: true
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -30,24 +33,26 @@ async function startBot() {
       console.log(qr);
     }
 
-    if (connection === "open") {
-      console.log("WhatsApp bağlandı");
-    }
-
     if (connection === "close") {
       const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        lastDisconnect?.error?.output?.statusCode !==
+        DisconnectReason.loggedOut;
+
+      console.log("Bağlantı kapandı. Tekrar bağlanıyor:", shouldReconnect);
 
       if (shouldReconnect) {
-        console.log("Tekrar bağlanılıyor...");
         startBot();
       }
+    }
+
+    if (connection === "open") {
+      console.log("WhatsApp bağlandı");
     }
   });
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
-    if (!msg.message) return;
+    if (!msg.message || msg.key.fromMe) return;
 
     const text =
       msg.message.conversation ||
@@ -55,8 +60,17 @@ async function startBot() {
 
     if (!text) return;
 
-    if (text === ".ping") {
-      await sock.sendMessage(msg.key.remoteJid, { text: "pong" });
+    if (text === ".menu") {
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: "Komutlar:\n.menu\n.saat"
+      });
+    }
+
+    if (text === ".saat") {
+      const now = new Date().toLocaleTimeString("tr-TR");
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: "Saat: " + now
+      });
     }
   });
 }
